@@ -94,4 +94,92 @@ and first git commit.
 
 ---
 
+## 2026-08-30 — First GitHub push & gh CLI setup
+
+**What we did:**
+- Renamed local default branch `master` → `main`.
+- Ran the app locally with `uvicorn app.main:app --reload`, confirmed `/` and `/health`
+  both respond.
+- Installed and authenticated GitHub CLI (`gh auth login`, browser flow).
+- Created the GitHub repo with `gh repo create GCP_CR_LAB --public --source=. --remote=origin`
+  — this created the repo on GitHub AND added it as the local `origin` remote in one step.
+- Pushed with `git push -u origin main` — the `-u` flag set `main` to track `origin/main`
+  as its upstream, so future `git push`/`git pull` on this branch no longer need the
+  remote/branch spelled out.
+- Repo is live: https://github.com/RajReddyGangasani/GCP_CR_LAB
+
+**Concepts covered:**
+- `gh repo create` vs plain `git push` — plain `git push` never creates a remote repo;
+  it only pushes to one that already exists. Repo creation requires the GitHub
+  website, API, or `gh` CLI.
+- Upstream tracking branch (`-u` / `--set-upstream`) and how to verify it
+  (`git branch -vv`, look for `[origin/main]`).
+
+**Status:** Local dev → Git → GitHub loop is complete for the initial scaffold. Next:
+Docker.
+
+---
+
+## 2026-08-30 — Docker fundamentals & first local container
+
+**Context:** Before touching Artifact Registry or Cloud Run, learned Docker itself and
+containerized the FastAPI app to prove it runs identically outside the local Python venv.
+
+**Core concept — why Docker:** portability and environment consistency. A container
+packages the app, its exact dependency versions, and a minimal OS layer into one unit
+that runs identically on a laptop, in Cloud Build, and on Cloud Run — instead of relying
+on whatever Python/packages happen to be installed on a given machine.
+
+**The four core building blocks:**
+- **Dockerfile** — a set of instructions defining how to build an image.
+- **Image** — the built package/blueprint of the app, produced by `docker build`.
+- **Container** — a running instance of an image, produced by `docker run`. One image
+  can back many running containers simultaneously (this is exactly how Cloud Run
+  autoscaling works later: one built image, multiple container instances spun up as
+  traffic increases, scaled back to zero when idle).
+- **Registry** (Artifact Registry, on GCP) — stores images. A registry holds multiple
+  *repositories*; each repository holds multiple *image* builds, each identified by a
+  *tag* (version label, e.g. `v1` or a commit hash).
+
+**Layers & caching:** each Dockerfile instruction (`FROM`, `COPY`, `RUN`, ...) creates
+one image layer. Docker caches layers, so a rebuild reuses every layer up to the first
+one that actually changed. This is why instruction **order** matters — in
+[Dockerfile](../Dockerfile), `requirements.txt` is copied and `pip install` run
+*before* the app code is copied, so editing Python code alone doesn't force a
+dependency reinstall on the next build.
+
+**Dockerfile details specific to Cloud Run:**
+- `FROM python:3.12-slim` — minimal official base image with Python already installed.
+- `CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]` —
+  two things that matter for containers specifically:
+  - `--host 0.0.0.0`: must listen on all interfaces, not `localhost` — inside a
+    container, `localhost` only refers to the container itself.
+  - `--port ${PORT:-8080}`: Cloud Run injects a `PORT` env var at runtime and expects
+    the app to listen on it, so the app can't hardcode a port. The shell form
+    (`sh -c "..."`) is required here instead of the plain exec-array form, since env
+    var expansion (`${PORT:-8080}`) needs a shell to evaluate it.
+
+**`.dockerignore`:** same idea as `.gitignore`, but for the **build context** — the set
+of files sent to the Docker daemon on `docker build .`. Excludes `.venv/`,
+`__pycache__/`, `docs/`, etc. so the build stays fast and the image stays lean.
+
+**Commands used:**
+```bash
+docker build -t gcp-cr-lab:v1 .                              # build image from Dockerfile
+docker run -d -p 8080:8080 --name gcp-cr-lab-test gcp-cr-lab:v1   # run it as a container
+docker ps                                                     # list running containers
+docker logs gcp-cr-lab-test                                   # view container's stdout/stderr
+curl http://localhost:8080/ ; curl http://localhost:8080/health   # verify it responds
+```
+`-p 8080:8080` maps `HOST_PORT:CONTAINER_PORT`. `-d` runs detached (background).
+
+**Result:** both `/` and `/health` responded identically to the local (non-Docker) run —
+confirming the containerized app behaves the same as it did under the local venv.
+
+**Status:** Image builds and runs locally. Not yet pushed to Artifact Registry, not yet
+deployed to Cloud Run. Dockerfile/.dockerignore being committed via a feature branch
+(`feature/add-dockerfile`) rather than directly to `main`.
+
+---
+
 <!-- Add new dated entries below this line as we progress through the project. -->
