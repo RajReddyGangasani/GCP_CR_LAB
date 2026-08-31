@@ -182,4 +182,36 @@ deployed to Cloud Run. Dockerfile/.dockerignore being committed via a feature br
 
 ---
 
+## 2026-08-31 — Artifact Registry push & Cloud Build trigger
+
+**Artifact Registry:**
+- Created repo `gcp-cr-lab` (Docker format, `us-central1`) via console.
+- One-time local setup to allow `docker push` from laptop:
+  `gcloud auth configure-docker us-central1-docker.pkg.dev` — registers `gcloud` as
+  Docker's credential helper for that registry host.
+- First push failed: local image was built `arm64` (Apple Silicon default), but Cloud
+  Run requires `amd64/linux`. Fixed with `docker build --platform linux/amd64 ...`.
+- Pushed successfully: `us-central1-docker.pkg.dev/gcp-cloud-run-lab/gcp-cr-lab/gcp-cr-lab:v2`.
+
+**Cloud Build:**
+- Attempted to deploy the manually-pushed image straight to Cloud Run, then stopped —
+  that skipped Cloud Build, out of order versus the planned
+  `Artifact Registry → Cloud Build → Cloud Run` sequence. Backed up to set up Cloud
+  Build properly first.
+- Connected GitHub repo via a **Host Connection** (Cloud Build 2nd-gen, uses the GitHub
+  App + Secret Manager under the hood) → linked `GCP_CR_LAB`.
+- Created trigger `GCP-LAB-TRIGGERS`: fires on push to `^main$`, builds from
+  `/Dockerfile`, pushes to
+  `us-central1-docker.pkg.dev/gcp-cloud-run-lab/gcp-cr-lab/gcp-cr-lab:$SHORT_SHA`
+  (tag = commit SHA, not a manual version number — traceable to exact code).
+- Org policy required a **user-managed service account** instead of the default Cloud
+  Build SA. Created `cloud-build-runner` with least-privilege roles:
+  `roles/logging.logWriter` (write build logs) and `roles/artifactregistry.writer`
+  (push images) — nothing broader.
+
+**Status:** Trigger created, not yet tested. Next: push a real commit to `main` via the
+usual branch → PR → merge flow and watch it fire in Cloud Build's History tab.
+
+---
+
 <!-- Add new dated entries below this line as we progress through the project. -->
