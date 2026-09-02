@@ -214,4 +214,30 @@ usual branch → PR → merge flow and watch it fire in Cloud Build's History ta
 
 ---
 
+## 2026-09-02 — Cloud Build fixed, Cloud Run deployed: full pipeline live
+
+**Cloud Build fix:** trigger was silently using the default Compute Engine service
+account (`...-compute@developer.gserviceaccount.com`) instead of a scoped one, causing
+a `roles/logging.logWriter` permission failure. Created a dedicated
+`cloud-build-runner` service account (roles: `logging.logWriter`,
+`artifactregistry.writer`) and explicitly assigned it to the trigger. Re-ran → build
+succeeded, image `gcp-cr-lab:44c2c07` (tagged by commit SHA) pushed to Artifact
+Registry automatically.
+
+**Cloud Run deploy (console):**
+- Create Service → existing container image → selected the Cloud-Build-produced image.
+- Region `us-central1`, allow unauthenticated invocations (public, no secrets/data yet
+  so acceptable), container port `8080`.
+- Verified live: `/` and `/health` both respond correctly from the deployed URL.
+
+**Pipeline now fully working end-to-end:**
+`git push to main → Cloud Build trigger → docker build → push to Artifact Registry →
+(manual) Cloud Run deploy of that image`. Cloud Run auto-redeploy on new image push is
+not yet wired up — currently a manual "select image, deploy" step per new build.
+
+**Status:** Core CI (build+push) automated. CD (auto-deploy to Cloud Run on new image)
+still manual. Next planned: Secret Manager.
+
+---
+
 <!-- Add new dated entries below this line as we progress through the project. -->
